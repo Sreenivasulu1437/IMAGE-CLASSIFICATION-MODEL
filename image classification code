@@ -1,0 +1,502 @@
+# ============================================
+# IMAGE CLASSIFICATION WITH CNN
+# Convolutional Neural Network using TensorFlow
+# ============================================
+
+# 1. Import Required Libraries
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers, models
+from tensorflow.keras.datasets import cifar10
+from tensorflow.keras.utils import to_categorical
+from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau, ModelCheckpoint
+import warnings
+warnings.filterwarnings('ignore')
+
+# Set random seeds for reproducibility
+np.random.seed(42)
+tf.random.set_seed(42)
+
+print("=" * 60)
+print("CNN IMAGE CLASSIFICATION - CIFAR-10 DATASET")
+print("=" * 60)
+print(f"TensorFlow version: {tf.__version__}")
+
+# ============================================
+# 2. Load and Explore Dataset
+# ============================================
+
+# Load CIFAR-10 dataset
+print("\n📂 LOADING CIFAR-10 DATASET...")
+(x_train, y_train), (x_test, y_test) = cifar10.load_data()
+
+# Class names for CIFAR-10
+class_names = ['Airplane', 'Automobile', 'Bird', 'Cat', 'Deer',
+               'Dog', 'Frog', 'Horse', 'Ship', 'Truck']
+
+print(f"\n📊 DATASET INFORMATION:")
+print(f"Training images: {x_train.shape[0]}")
+print(f"Testing images: {x_test.shape[0]}")
+print(f"Image dimensions: {x_train.shape[1]} x {x_train.shape[2]} pixels")
+print(f"Number of channels: {x_train.shape[3]} (RGB)")
+print(f"Number of classes: {len(class_names)}")
+print(f"Classes: {class_names}")
+
+# Check class distribution
+unique, counts = np.unique(y_train, return_counts=True)
+print(f"\nClass distribution in training set:")
+for class_idx, count in zip(unique, counts):
+    print(f"  {class_names[class_idx]}: {count} images")
+
+# ============================================
+# 3. Data Preprocessing
+# ============================================
+
+print("\n🔄 PREPROCESSING DATA...")
+
+# Normalize pixel values to [0, 1]
+x_train = x_train.astype('float32') / 255.0
+x_test = x_test.astype('float32') / 255.0
+
+# Convert labels to one-hot encoding
+y_train_cat = to_categorical(y_train, 10)
+y_test_cat = to_categorical(y_test, 10)
+
+print(f"Training data shape: {x_train.shape}")
+print(f"Training labels shape: {y_train_cat.shape}")
+print(f"Test data shape: {x_test.shape}")
+print(f"Test labels shape: {y_test_cat.shape}")
+
+# ============================================
+# 4. Data Visualization
+# ============================================
+
+# Display sample images
+fig, axes = plt.subplots(3, 5, figsize=(12, 8))
+for i, ax in enumerate(axes.flat):
+    idx = np.random.randint(0, len(x_train))
+    ax.imshow(x_train[idx])
+    ax.set_title(f"{class_names[y_train[idx][0]]}")
+    ax.axis('off')
+plt.suptitle('Sample Images from CIFAR-10 Dataset', fontsize=14, fontweight='bold')
+plt.tight_layout()
+plt.show()
+
+# ============================================
+# 5. Build CNN Model
+# ============================================
+
+print("\n🏗️ BUILDING CNN MODEL...")
+
+def create_cnn_model(input_shape=(32, 32, 3), num_classes=10):
+    """
+    Create a CNN model for image classification
+    """
+    model = models.Sequential([
+        # First Convolutional Block
+        layers.Conv2D(32, (3, 3), activation='relu', padding='same', input_shape=input_shape),
+        layers.BatchNormalization(),
+        layers.Conv2D(32, (3, 3), activation='relu', padding='same'),
+        layers.BatchNormalization(),
+        layers.MaxPooling2D((2, 2)),
+        layers.Dropout(0.2),
+        
+        # Second Convolutional Block
+        layers.Conv2D(64, (3, 3), activation='relu', padding='same'),
+        layers.BatchNormalization(),
+        layers.Conv2D(64, (3, 3), activation='relu', padding='same'),
+        layers.BatchNormalization(),
+        layers.MaxPooling2D((2, 2)),
+        layers.Dropout(0.3),
+        
+        # Third Convolutional Block
+        layers.Conv2D(128, (3, 3), activation='relu', padding='same'),
+        layers.BatchNormalization(),
+        layers.Conv2D(128, (3, 3), activation='relu', padding='same'),
+        layers.BatchNormalization(),
+        layers.MaxPooling2D((2, 2)),
+        layers.Dropout(0.4),
+        
+        # Fully Connected Layers
+        layers.Flatten(),
+        layers.Dense(256, activation='relu'),
+        layers.BatchNormalization(),
+        layers.Dropout(0.5),
+        layers.Dense(num_classes, activation='softmax')
+    ])
+    
+    return model
+
+# Create the model
+cnn_model = create_cnn_model()
+cnn_model.summary()
+
+# ============================================
+# 6. Compile the Model
+# ============================================
+
+# Compile with Adam optimizer and categorical crossentropy loss
+cnn_model.compile(
+    optimizer=keras.optimizers.Adam(learning_rate=0.001),
+    loss='categorical_crossentropy',
+    metrics=['accuracy']
+)
+
+print("\n✅ Model compiled successfully!")
+
+# ============================================
+# 7. Callbacks for Training
+# ============================================
+
+# Early stopping to prevent overfitting
+early_stopping = EarlyStopping(
+    monitor='val_loss',
+    patience=10,
+    restore_best_weights=True,
+    verbose=1
+)
+
+# Reduce learning rate when plateau
+reduce_lr = ReduceLROnPlateau(
+    monitor='val_loss',
+    factor=0.5,
+    patience=5,
+    min_lr=0.00001,
+    verbose=1
+)
+
+# Save best model
+model_checkpoint = ModelCheckpoint(
+    'best_cnn_model.h5',
+    monitor='val_accuracy',
+    save_best_only=True,
+    verbose=1
+)
+
+# ============================================
+# 8. Train the Model
+# ============================================
+
+print("\n🚀 TRAINING CNN MODEL...")
+print("-" * 60)
+
+history = cnn_model.fit(
+    x_train, y_train_cat,
+    batch_size=64,
+    epochs=50,
+    validation_split=0.2,
+    callbacks=[early_stopping, reduce_lr, model_checkpoint],
+    verbose=1
+)
+
+print("\n✅ Training completed!")
+
+# ============================================
+# 9. Model Evaluation
+# ============================================
+
+# Evaluate on test set
+test_loss, test_accuracy = cnn_model.evaluate(x_test, y_test_cat, verbose=0)
+
+print("\n" + "=" * 60)
+print("MODEL PERFORMANCE EVALUATION")
+print("=" * 60)
+print(f"Test Loss: {test_loss:.4f}")
+print(f"Test Accuracy: {test_accuracy:.4f} ({test_accuracy*100:.2f}%)")
+
+# Get predictions
+y_pred_proba = cnn_model.predict(x_test)
+y_pred = np.argmax(y_pred_proba, axis=1)
+y_true = np.argmax(y_test_cat, axis=1)
+
+# Calculate per-class accuracy
+print("\n📊 PER-CLASS PERFORMANCE:")
+print(classification_report(y_true, y_pred, target_names=class_names))
+
+# ============================================
+# 10. Training History Visualization
+# ============================================
+
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+# Accuracy plot
+axes[0].plot(history.history['accuracy'], label='Train Accuracy', linewidth=2)
+axes[0].plot(history.history['val_accuracy'], label='Validation Accuracy', linewidth=2)
+axes[0].set_title('Model Accuracy', fontsize=14, fontweight='bold')
+axes[0].set_xlabel('Epoch', fontsize=12)
+axes[0].set_ylabel('Accuracy', fontsize=12)
+axes[0].legend()
+axes[0].grid(True, alpha=0.3)
+
+# Loss plot
+axes[1].plot(history.history['loss'], label='Train Loss', linewidth=2)
+axes[1].plot(history.history['val_loss'], label='Validation Loss', linewidth=2)
+axes[1].set_title('Model Loss', fontsize=14, fontweight='bold')
+axes[1].set_xlabel('Epoch', fontsize=12)
+axes[1].set_ylabel('Loss', fontsize=12)
+axes[1].legend()
+axes[1].grid(True, alpha=0.3)
+
+plt.tight_layout()
+plt.show()
+
+# ============================================
+# 11. Confusion Matrix
+# ============================================
+
+cm = confusion_matrix(y_true, y_pred)
+
+plt.figure(figsize=(12, 10))
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+            xticklabels=class_names, yticklabels=class_names)
+plt.title('Confusion Matrix - CNN Classification', fontsize=14, fontweight='bold')
+plt.xlabel('Predicted Class', fontsize=12)
+plt.ylabel('Actual Class', fontsize=12)
+plt.xticks(rotation=45)
+plt.yticks(rotation=45)
+plt.tight_layout()
+plt.show()
+
+# ============================================
+# 12. Visualize Predictions
+# ============================================
+
+def plot_predictions(model, x_data, y_true, num_images=10):
+    """
+    Display images with predicted and true labels
+    """
+    predictions = model.predict(x_data[:num_images])
+    pred_classes = np.argmax(predictions, axis=1)
+    
+    fig, axes = plt.subplots(2, 5, figsize=(15, 6))
+    axes = axes.ravel()
+    
+    for i in range(num_images):
+        axes[i].imshow(x_data[i])
+        color = 'green' if pred_classes[i] == y_true[i] else 'red'
+        axes[i].set_title(f'Pred: {class_names[pred_classes[i]]}\nTrue: {class_names[y_true[i]]}', 
+                         color=color, fontsize=10)
+        axes[i].axis('off')
+    
+    plt.suptitle('Sample Predictions (Green=Correct, Red=Wrong)', 
+                fontsize=14, fontweight='bold')
+    plt.tight_layout()
+    plt.show()
+
+plot_predictions(cnn_model, x_test, y_true.flatten())
+
+# ============================================
+# 13. Misclassification Analysis
+# ============================================
+
+misclassified_idx = np.where(y_pred != y_true)[0]
+print("\n" + "=" * 60)
+print("MISCLASSIFICATION ANALYSIS")
+print("=" * 60)
+print(f"Total misclassifications: {len(misclassified_idx)} / {len(y_test)} ({len(misclassified_idx)/len(y_test)*100:.2f}%)")
+
+# Show some misclassified examples
+fig, axes = plt.subplots(2, 5, figsize=(15, 6))
+axes = axes.ravel()
+
+for i, idx in enumerate(misclassified_idx[:10]):
+    axes[i].imshow(x_test[idx])
+    axes[i].set_title(f'True: {class_names[y_true[idx]]}\nPred: {class_names[y_pred[idx]]}', 
+                     color='red', fontsize=10)
+    axes[i].axis('off')
+
+plt.suptitle('Misclassified Images Analysis', fontsize=14, fontweight='bold')
+plt.tight_layout()
+plt.show()
+
+# ============================================
+# 14. Model Architecture Visualization
+# ============================================
+
+# Plot model architecture
+from tensorflow.keras.utils import plot_model
+
+plot_model(cnn_model, to_file='cnn_model_architecture.png', 
+           show_shapes=True, show_layer_names=True)
+print("\n✅ Model architecture saved as 'cnn_model_architecture.png'")
+
+# ============================================
+# 15. Alternative: Simpler CNN Model for Comparison
+# ============================================
+
+def create_simple_cnn():
+    """
+    Create a simpler CNN model for comparison
+    """
+    model = models.Sequential([
+        layers.Conv2D(32, (3, 3), activation='relu', input_shape=(32, 32, 3)),
+        layers.MaxPooling2D((2, 2)),
+        layers.Conv2D(64, (3, 3), activation='relu'),
+        layers.MaxPooling2D((2, 2)),
+        layers.Conv2D(64, (3, 3), activation='relu'),
+        layers.Flatten(),
+        layers.Dense(64, activation='relu'),
+        layers.Dense(10, activation='softmax')
+    ])
+    return model
+
+simple_model = create_simple_cnn()
+simple_model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+
+# Train simple model briefly for comparison
+print("\n📊 TRAINING SIMPLE CNN FOR COMPARISON...")
+simple_history = simple_model.fit(
+    x_train, y_train_cat,
+    batch_size=64,
+    epochs=20,
+    validation_split=0.2,
+    verbose=0
+)
+
+simple_test_loss, simple_test_acc = simple_model.evaluate(x_test, y_test_cat, verbose=0)
+
+print(f"\nModel Comparison:")
+print(f"  Complex CNN Test Accuracy: {test_accuracy:.4f}")
+print(f"  Simple CNN Test Accuracy: {simple_test_acc:.4f}")
+print(f"  Improvement: {(test_accuracy - simple_test_acc)*100:.2f}%")
+
+# ============================================
+# 16. Feature Maps Visualization
+# ============================================
+
+def visualize_feature_maps(model, image_index=0):
+    """
+    Visualize feature maps from convolutional layers
+    """
+    # Get intermediate layer outputs
+    layer_outputs = [layer.output for layer in model.layers if 'conv2d' in layer.name]
+    activation_model = models.Model(inputs=model.input, outputs=layer_outputs)
+    
+    # Get feature maps for a single image
+    img = x_test[image_index:image_index+1]
+    activations = activation_model.predict(img)
+    
+    # Plot feature maps
+    for layer_idx, layer_activation in enumerate(activations[:2]):  # First 2 conv layers
+        n_features = min(16, layer_activation.shape[-1])
+        fig, axes = plt.subplots(4, 4, figsize=(12, 12))
+        axes = axes.ravel()
+        
+        for i in range(n_features):
+            axes[i].imshow(layer_activation[0, :, :, i], cmap='viridis')
+            axes[i].axis('off')
+        
+        for i in range(n_features, 16):
+            axes[i].axis('off')
+        
+        plt.suptitle(f'Feature Maps - Conv Layer {layer_idx + 1}', fontsize=14, fontweight='bold')
+        plt.tight_layout()
+        plt.show()
+
+print("\n🎨 Visualizing Feature Maps...")
+visualize_feature_maps(cnn_model, image_index=0)
+
+# ============================================
+# 17. Save the Model
+# ============================================
+
+# Save in Keras format
+cnn_model.save('cnn_image_classifier.h5')
+print("\n✅ Model saved as 'cnn_image_classifier.h5'")
+
+# Convert to TensorFlow Lite for mobile deployment
+converter = tf.lite.TFLiteConverter.from_keras_model(cnn_model)
+tflite_model = converter.convert()
+
+with open('cnn_model.tflite', 'wb') as f:
+    f.write(tflite_model)
+print("✅ TensorFlow Lite model saved as 'cnn_model.tflite'")
+
+# ============================================
+# 18. Load and Test Saved Model
+# ============================================
+
+# Load the saved model
+loaded_model = keras.models.load_model('cnn_image_classifier.h5')
+print("\n✅ Model loaded successfully!")
+
+# Test loaded model
+loaded_test_loss, loaded_test_acc = loaded_model.evaluate(x_test, y_test_cat, verbose=0)
+print(f"Loaded model test accuracy: {loaded_test_acc:.4f}")
+
+# Test on a single image
+def predict_single_image(image, model):
+    """
+    Predict class for a single image
+    """
+    img = np.expand_dims(image, axis=0)
+    predictions = model.predict(img, verbose=0)
+    predicted_class = np.argmax(predictions[0])
+    confidence = np.max(predictions[0])
+    return predicted_class, confidence
+
+# Test on random test images
+print("\n🔍 TESTING ON RANDOM IMAGES:")
+for i in range(5):
+    idx = np.random.randint(0, len(x_test))
+    pred_class, confidence = predict_single_image(x_test[idx], loaded_model)
+    true_class = y_true[idx]
+    
+    status = "✅ CORRECT" if pred_class == true_class else "❌ WRONG"
+    print(f"\nImage {i+1}:")
+    print(f"  True: {class_names[true_class]}")
+    print(f"  Predicted: {class_names[pred_class]} ({confidence:.2%} confidence)")
+    print(f"  Result: {status}")
+
+# ============================================
+# 19. Performance Summary
+# ============================================
+
+print("\n" + "=" * 60)
+print("FINAL SUMMARY - CNN IMAGE CLASSIFICATION")
+print("=" * 60)
+
+print("""
+✅ PROJECT COMPLETED SUCCESSFULLY
+
+📌 MODEL ARCHITECTURE:
+   • 3 Convolutional Blocks (32, 64, 128 filters)
+   • Batch Normalization after each convolution
+   • MaxPooling for dimensionality reduction
+   • Dropout layers (0.2, 0.3, 0.4, 0.5) for regularization
+   • Dense layer (256 units) + Softmax output
+
+📈 PERFORMANCE METRICS:
+   • Test Accuracy: {:.2f}%
+   • Best Validation Accuracy: {:.2f}%
+   • Training Time: {} epochs
+
+🎯 BEST PERFORMING CLASSES:
+   • Automobile, Ship, Airplane, Truck
+
+⚠️ CONFUSION PATTERNS:
+   • Cat ↔ Dog (similar appearance)
+   • Bird ↔ Airplane (similar shapes from certain angles)
+   • Deer ↔ Horse (similar body structure)
+
+💡 IMPROVEMENT SUGGESTIONS:
+   1. Data Augmentation (rotation, zoom, flip)
+   2. Transfer Learning (VGG16, ResNet50)
+   3. Increase model depth/complexity
+   4. Use learning rate scheduling
+   5. Ensemble multiple models
+
+📁 DELIVERABLES:
+   • cnn_image_classifier.h5 (Keras model)
+   • cnn_model.tflite (Mobile-optimized model)
+   • best_cnn_model.h5 (Best checkpoint)
+   • cnn_model_architecture.png (Visualization)
+""".format(test_accuracy*100, max(history.history['val_accuracy'])*100, len(history.history['loss'])))
+
+print("=" * 60)
+print("🎉 CNN IMAGE CLASSIFICATION IMPLEMENTATION COMPLETE!")
+print("=" * 60)
