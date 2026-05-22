@@ -158,3 +158,5 @@ confusion_matrix.png: Per-class performance
 
 🎯 CONCLUSION
 The CNN achieves 75-78% test accuracy on CIFAR-10, demonstrating effective feature learning for image classification. Deeper architectures (ResNet, VGG) or transfer learning could further improve performance for production applications.
+
+<img width="1132" height="703" alt="Image" src="https://github.com/user-attachments/assets/bc497b50-6059-4ee5-92ca-7e70e40919f8" />
